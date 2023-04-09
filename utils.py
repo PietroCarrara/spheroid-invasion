@@ -30,27 +30,18 @@ def findJoinKill(img, iters = 1, logger = EmptyLogger()):
     # Join very close contours
     joinedImg = np.zeros_like(img)
     cv2.drawContours(joinedImg, contours, -1, 255, 3)
-    logger.log(joinedImg, "contour detection")
-
-    joinedImg = cv2.morphologyEx(joinedImg, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)));
-    logger.log(joinedImg, "contour detection - ellipse")
-    joinedImg = cv2.erode(joinedImg, np.ones((3, 3)))
-    logger.log(joinedImg, "contour detection - erosion")
-    joinedImg = cv2.dilate(joinedImg, np.ones((3, 3)))
-    logger.log(joinedImg, "contour detection - dilation")
-    # Rebuild joined contours and filter out those that are still too small or too far from the shperoid
+    logger.log(joinedImg, "contours detected")
+    joinedImg = cv2.morphologyEx(joinedImg, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (11, 11)));
+    logger.log(joinedImg, "morphological closing")
     joined, _ = cv2.findContours(joinedImg, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_TC89_KCOS)
+    logger.log(cv2.drawContours(joinedImg.copy(), joined, -1, 127, 3), "joined contours")
 
     # Kill 99% of the smallest contours
     joined = sorted(joined, key=lambda c: cv2.contourArea(c), reverse=True) # Sort by perimeter
     joined = joined[:int(len(joined)*0.1)]
-    # img = joinedImg
+    logger.log(cv2.drawContours(joinedImg.copy(), joined, -1, 127, 3), "contours after elimination step")
     img = cv2.fillPoly(img.copy(), joined, 255)
-    logger.log(img, "contour detection - elimination")
-    img = cv2.erode(img, np.ones((3, 3)))
-    logger.log(img, "contour detection - erosion")
-
-
+    logger.log(img, "contours filled-in")
 
   return joined
 

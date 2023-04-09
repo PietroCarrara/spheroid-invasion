@@ -3,16 +3,17 @@ import numpy as np
 from utils import findJoinKill, contrast, isCircle, cropToRegion, contourDistance, Logger
 
 # Number of contours to use to compose the final invasion zone
-FINAL_SEGMENTS = 10
+FINAL_SEGMENTS = 1
 
 # FILE = 'ATP_ARC0023.png'
 # FILE = 'ATP_RGD0035.png'
-FILE = 'ATP_RGD0040.png'
+# FILE = 'ATP_RGD0040.png'
 # FILE = 'ATP0011.tif'
-# FILE = 'siControl0047.png'
+FILE = 'siControl0047.png'
 
 INPUT = 'test-data/'+FILE
-OUTPUT = 'out/'+FILE
+# OUTPUT = 'out/'+FILE
+OUTPUT = 'out.png'
 
 #############
 # MAIN CODE #
@@ -46,17 +47,19 @@ logger.log(cv2.drawContours(top95.copy(), [sphere], -1, 127, 3), "largest circul
 region, offset = cropToRegion(sphere, img, 3)
 invOffset = (-offset[0], -offset[1])
 R_HEIGHT, R_WIDTH = region.shape[:2]
-logger.log(region, "cropping")
+logger.log(region, "zooming into spheroid")
 
 # Remove the spheroid and find other bright elements (hopefully, the invasion "rays"/"tentacles")
 cv2.fillPoly(region, [sphere], np.median(region), offset=offset)
 region = contrast(region)
 _, region = cv2.threshold(region, np.percentile(region, 95), 255, cv2.THRESH_BINARY)
-logger.log(region, "thresholding")
+cv2.fillPoly(region, [sphere], 255, offset=offset)
+logger.log(region, "thresholding before detecting contour of rays")
 
 # Find the largest contours that are not too far from the spheroid
 joined = findJoinKill(region, logger=logger, iters=2)
 joined = sorted(joined, key=lambda c: cv2.contourArea(c)/max(1, contourDistance(c, sphere, invOffset))**2, reverse=True)
+invasions = joined[:FINAL_SEGMENTS]
 
 cv2.drawContours(orig, [sphere], -1, (0, 0, 255), 3)
 cv2.drawContours(orig, joined[:FINAL_SEGMENTS], -1, (255, 0, 0), 3, offset=invOffset)
