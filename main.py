@@ -4,16 +4,18 @@ from utils import findJoinKill, contrast, isCircle, cropToRegion, contourDistanc
 
 # Number of contours to use to compose the final invasion zone
 FINAL_SEGMENTS = 1
+# How many iterations to run with the find/join/kill algorithm
+GROUPING_ITERS = 2
 
 # FILE = 'ATP_ARC0023.png'
 # FILE = 'ATP_RGD0035.png'
-# FILE = 'ATP_RGD0040.png'
+FILE = 'ATP_RGD0040.png'
 # FILE = 'ATP0011.tif'
-FILE = 'siControl0047.png'
+# FILE = 'siControl0047.png'
 
 INPUT = 'test-data/'+FILE
-# OUTPUT = 'out/'+FILE
-OUTPUT = 'out.png'
+OUTPUT = 'out/'+FILE
+# OUTPUT = 'out.png'
 
 #############
 # MAIN CODE #
@@ -40,8 +42,8 @@ logger.log(top95, "thresholding")
 contours, _ = cv2.findContours(top95, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_TC89_KCOS)
 contours = sorted(contours, key=lambda c: cv2.contourArea(c), reverse=True) # Sort contours by area
 sphere = next((c for c in contours if isCircle(c)), contours[0]) # Get the first that is circular
-logger.log(cv2.drawContours(top95.copy(), contours, -1, 127, 3), "contour detection")
-logger.log(cv2.drawContours(top95.copy(), [sphere], -1, 127, 3), "largest circular contour")
+logger.log(cv2.drawContours(np.zeros_like(top95), contours, -1, 255, 3), "contour detection")
+logger.log(cv2.drawContours(np.zeros_like(top95), [sphere], -1, 255, 3), "largest circular contour")
 
 # Zoom in on the sphere
 region, offset = cropToRegion(sphere, img, 3)
@@ -57,7 +59,7 @@ cv2.fillPoly(region, [sphere], 255, offset=offset)
 logger.log(region, "thresholding before detecting contour of rays")
 
 # Find the largest contours that are not too far from the spheroid
-joined = findJoinKill(region, logger=logger, iters=2)
+joined = findJoinKill(region, logger=logger, iters=GROUPING_ITERS)
 joined = sorted(joined, key=lambda c: cv2.contourArea(c)/max(1, contourDistance(c, sphere, invOffset))**2, reverse=True)
 invasions = joined[:FINAL_SEGMENTS]
 

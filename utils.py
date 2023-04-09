@@ -34,13 +34,14 @@ def findJoinKill(img, iters = 1, logger = EmptyLogger()):
     joinedImg = cv2.morphologyEx(joinedImg, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (11, 11)));
     logger.log(joinedImg, "morphological closing")
     joined, _ = cv2.findContours(joinedImg, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_TC89_KCOS)
-    logger.log(cv2.drawContours(joinedImg.copy(), joined, -1, 127, 3), "joined contours")
+    logger.log(cv2.drawContours(np.zeros_like(joinedImg), joined, -1, 255, 3), "joined contours")
 
     # Kill 99% of the smallest contours
     joined = sorted(joined, key=lambda c: cv2.contourArea(c), reverse=True) # Sort by perimeter
     joined = joined[:int(len(joined)*0.1)]
-    logger.log(cv2.drawContours(joinedImg.copy(), joined, -1, 127, 3), "contours after elimination step")
-    img = cv2.fillPoly(img.copy(), joined, 255)
+    img = cv2.drawContours(np.zeros_like(joinedImg), joined, -1, 255, 3)
+    logger.log(img, "contours after elimination step")
+    img = cv2.fillPoly(np.zeros_like(joinedImg), joined, 255)
     logger.log(img, "contours filled-in")
 
   return joined
