@@ -1,62 +1,64 @@
 import cv2
 import numpy as np
+from utils import findJoinKill, contrast, isCircle, cropToRegion, contourDistance, Logger
 
-# FILE = 'test-data/ATP_ARC0023.png'
-# FILE = 'test-data/ATP0011.tif'
-# FILE = 'test-data/siControl0047.png'
-FILE = 'test-data/ATP_RGD0040.png'
+# Number of contours to use to compose the final invasion zone
+FINAL_SEGMENTS = 10
 
-# Contrast streching (enhances contrast)
-def contrast(img):
-  low = img.min()
-  high = img.max()
-  scale = high - low
-  return np.uint8(((img - low)/scale)*255)
+# FILE = 'ATP_ARC0023.png'
+# FILE = 'ATP_RGD0035.png'
+FILE = 'ATP_RGD0040.png'
+# FILE = 'ATP0011.tif'
+# FILE = 'siControl0047.png'
 
-# Tests if a contour is circle-like
-def isCircle(contour):
-  _, r = cv2.minEnclosingCircle(contour)
-  circleness = cv2.contourArea(contour) / (np.pi*r**2)
-  return circleness >= 0.35 # Cover at least 35% of the circle's pixels to be a circle-like object
+INPUT = 'test-data/'+FILE
+OUTPUT = 'out/'+FILE
 
-# Zoom in on a contour. Width and height are multiplied by the scale, affecting the zoom
-def cropToRegion(contour, img, scale = 1):
-  maxH, maxW = img.shape[:2]
-  (x, y, w, h) = cv2.boundingRect(contour)
+#############
+# MAIN CODE #
+#############
 
-  # Zoom out according to scale but keep the center unchanged
-  cx = x + w/2
-  cy = y + h/2
-  w *= scale
-  h *= scale
-  x = cx - w/2
-  y = cy - h/2
+logger = Logger()
 
-  # Make sure we're still inside the image
-  x = max(int(x), 0)
-  y = max(int(y), 0)
-  w = min(int(w), maxW)
-  h = min(int(h), maxH)
-
-  return img[y:y+h, x:x+w], (-x, -y)
-
-orig = cv2.imread(FILE)
+orig = cv2.imread(INPUT)
+HEIGHT, WIDTH = orig.shape[:2]
+logger.log(orig, "input")
 
 img = cv2.cvtColor(orig, cv2.COLOR_BGR2GRAY)
 img = contrast(img)
+logger.log(img, "enhancing contrast")
 
-# Invert colors
 img = 255 - img
+logger.log(img, "inverting colors")
 
 # Kill 95% of the least bright pixels
 _, top95 = cv2.threshold(img, np.percentile(img, 95), 255, cv2.THRESH_BINARY)
+logger.log(top95, "thresholding")
 
 # Find the largest contour that is circular
-contours, hierarchy = cv2.findContours(top95, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_TC89_KCOS)
+contours, _ = cv2.findContours(top95, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_TC89_KCOS)
 contours = sorted(contours, key=lambda c: cv2.contourArea(c), reverse=True) # Sort contours by area
 sphere = next((c for c in contours if isCircle(c)), contours[0]) # Get the first that is circular
+logger.log(cv2.drawContours(top95.copy(), contours, -1, 127, 3), "contour detection")
+logger.log(cv2.drawContours(top95.copy(), [sphere], -1, 127, 3), "largest circular contour")
 
 # Zoom in on the sphere
-zoomImg, offset = cropToRegion(sphere, orig, 3)
+region, offset = cropToRegion(sphere, img, 3)
+invOffset = (-offset[0], -offset[1])
+R_HEIGHT, R_WIDTH = region.shape[:2]
+logger.log(region, "cropping")
 
-cv2.imwrite('out.png', cv2.drawContours(zoomImg, [sphere], -1, (255, 0, 255), 3, offset=offset))
+# Remove the spheroid and find other bright elements (hopefully, the invasion "rays"/"tentacles")
+cv2.fillPoly(region, [sphere], np.median(region), offset=offset)
+region = contrast(region)
+_, region = cv2.threshold(region, np.percentile(region, 95), 255, cv2.THRESH_BINARY)
+logger.log(region, "thresholding")
+
+# Find the largest contours that are not too far from the spheroid
+joined = findJoinKill(region, logger=logger, iters=2)
+joined = sorted(joined, key=lambda c: cv2.contourArea(c)/max(1, contourDistance(c, sphere, invOffset))**2, reverse=True)
+
+cv2.drawContours(orig, [sphere], -1, (0, 0, 255), 3)
+cv2.drawContours(orig, joined[:FINAL_SEGMENTS], -1, (255, 0, 0), 3, offset=invOffset)
+cv2.imwrite(OUTPUT, orig)
+logger.log(orig, "output")
